@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Quality Checker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0F0E;
+    --panel:#141B19;
+    --panel-2:#1B2422;
+    --line:#263330;
+    --text:#E8ECE9;
+    --muted:#8FA39C;
+    --accent:#3DDC97;
+    --accent-dim:#1F6E4E;
+    --warn:#F2B84B;
+    --err:#E5484D;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif; margin:0;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  header{
+    padding:28px 20px 18px; border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:rgba(11,15,14,0.92); backdrop-filter:blur(6px); z-index:10;
+  }
+  header .eyebrow{color:var(--accent); font-size:12px; letter-spacing:0.14em; text-transform:uppercase; font-family:'JetBrains Mono',monospace;}
+  header h1{font-size:22px; margin-top:4px;}
+
+  /* Signature element: waveform score meter */
+  #meter-wrap{margin-top:16px;}
+  #meter{
+    display:flex; align-items:flex-end; gap:2px; height:44px;
+  }
+  #meter span{
+    flex:1; background:var(--panel-2); border-radius:2px 2px 0 0;
+    transition:height 0.4s ease, background 0.4s ease;
+    min-height:3px;
+  }
+  #meter-label{display:flex; justify-content:space-between; margin-top:6px; font-size:12px; color:var(--muted);}
+  #meter-score{font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--text); font-weight:600;}
+
+  main{max-width:760px; margin:0 auto; padding:24px 20px 100px;}
+  section{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:20px; margin-bottom:18px;
+  }
+  section h2{font-size:15px; margin-bottom:4px;}
+  section p.hint{color:var(--muted); font-size:13px; margin:4px 0 16px;}
+
+  label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em;}
+  textarea, input[type=text], input[type=number]{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:6px;
+    color:var(--text); padding:10px 12px; font-family:'Inter',sans-serif; font-size:14px;
+  }
+  textarea{min-height:120px; resize:vertical;}
+  input[type=file]{color:var(--muted); font-size:13px;}
+
+  .row{display:flex; gap:8px; margin-bottom:8px; align-items:center;}
+  .row input[type=text]{flex:1;}
+  .row input[type=number]{width:70px;}
+  .tag-btn, .icon-btn{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
+    border-radius:6px; padding:8px 10px; cursor:pointer; font-size:13px;
+  }
+  .icon-btn:hover, .tag-btn:hover{border-color:var(--accent); color:var(--accent);}
+  .add-btn{
+    background:transparent; border:1px dashed var(--line); color:var(--muted);
+    width:100%; padding:8px; border-radius:6px; cursor:pointer; font-size:13px; margin-top:4px;
+  }
+  .add-btn:hover{border-color:var(--accent); color:var(--accent);}
+
+  .chip-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+  .chip{
+    font-family:'JetBrains Mono',monospace; font-size:12px; padding:4px 8px; border-radius:20px;
+    border:1px solid var(--line); display:flex; align-items:center; gap:6px;
+  }
+  .chip.hit{border-color:var(--accent); color:var(--accent);}
+  .chip.miss{border-color:var(--err); color:var(--err);}
+  .chip.forbidden-hit{border-color:var(--err); color:var(--err); background:rgba(229,72,77,0.08);}
+
+  .criteria-item, .checklist-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 0; border-bottom:1px solid var(--line);
+  }
+  .criteria-item:last-child, .checklist-item:last-child{border-bottom:none;}
+  .criteria-name{font-size:14px;}
+  .criteria-weight{color:var(--muted); font-size:11px; font-family:'JetBrains Mono',monospace;}
+  .score-select{display:flex; gap:4px;}
+  .score-select button{
+    width:28px; height:28px; border-radius:5px; border:1px solid var(--line);
+    background:var(--panel-2); color:var(--muted); cursor:pointer; font-size:12px; font-family:'JetBrains Mono',monospace;
+  }
+  .score-select button.active{background:var(--accent-dim); color:var(--accent); border-color:var(--accent);}
+
+  .checklist-item label.chk{
+    display:flex; align-items:center; gap:10px; text-transform:none; font-size:14px; color:var(--text); margin:0; cursor:pointer;
+  }
+  .checklist-item input[type=checkbox]{width:18px; height:18px; accent-color:var(--accent);}
+
+  button.primary{
+    background:var(--accent); color:#06120D; border:none; border-radius:8px;
+    padding:12px 18px; font-weight:600; font-size:14px; cursor:pointer; width:100%;
+    font-family:'Space Grotesk',sans-serif;
+  }
+  button.primary:hover{background:#4FE8A9;}
+  button.ghost{
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    border-radius:8px; padding:10px 14px; font-size:13px; cursor:pointer;
+  }
+  button.ghost:hover{border-color:var(--accent); color:var(--accent);}
+
+  .btn-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+
+  #report{white-space:pre-wrap; font-family:'JetBrains Mono',monospace; font-size:12.5px; line-height:1.6; color:var(--text); background:var(--panel-2); border-radius:8px; padding:14px; margin-top:12px; border:1px solid var(--line);}
+
+  audio{width:100%; margin-top:10px;}
+
+  .band-legend{display:flex; gap:14px; font-size:11px; color:var(--muted); margin-top:8px;}
+  .band-legend span{display:flex; align-items:center; gap:5px;}
+  .dot{width:8px; height:8px; border-radius:50%;}
+
+  @media (max-width:480px){
+    header h1{font-size:19px;}
+    section{padding:16px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">QA / call review</div>
+  <h1>Call Quality Checker</h1>
+  <div id="meter-wrap">
+    <div id="meter"></div>
+    <div id="meter-label">
+      <span id="meter-score">Score: — / 100</span>
+      <span id="meter-verdict">Awaiting review</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section id="config-section">
+    <h2>1 · Set your conditions</h2>
+    <p class="hint">Define what "good" looks like for this call type. These conditions are saved in your browser and reused next time.</p>
+
+    <label>Required phrases (must appear)</label>
+    <div id="required-list"></div>
+    <button class="add-btn" onclick="addCondition('required')">+ add required phrase</button>
+
+    <label style="margin-top:16px;">Forbidden phrases (must not appear)</label>
+    <div id="forbidden-list"></div>
+    <button class="add-btn" onclick="addCondition('forbidden')">+ add forbidden phrase</button>
+
+    <label style="margin-top:16px;">Scoring criteria (rated 1–5, weighted)</label>
+    <div id="criteria-config-list"></div>
+    <button class="add-btn" onclick="addCriteria()">+ add scoring criterion</button>
+
+    <label style="margin-top:16px;">Compliance checklist (yes / no)</label>
+    <div id="checklist-config-list"></div>
+    <button class="add-btn" onclick="addChecklist()">+ add checklist item</button>
+
+    <div class="btn-row">
+      <button class="ghost" onclick="exportConfig()">Export conditions (.json)</button>
+      <label class="ghost" style="cursor:pointer;">Import conditions
+        <input type="file" id="import-input" accept=".json" style="display:none" onchange="importConfig(event)">
+      </label>
+      <button class="ghost" onclick="resetConfig()">Reset to defaults</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · Add the call</h2>
+    <p class="hint">Paste the transcript, and optionally attach the audio to listen while you rate it.</p>
+    <label>Transcript</label>
+    <textarea id="transcript" placeholder="Paste the call transcript here..."></textarea>
+    <label style="margin-top:12px;">Audio file (optional, for reference playback)</label>
+    <input type="file" id="audio-upload" accept="audio/*" onchange="loadAudio(event)">
+    <audio id="audio-player" controls style="display:none;"></audio>
+  </section>
+
+  <section>
+    <h2>3 · Review</h2>
+    <p class="hint">Phrase checks run automatically from the transcript. Rate the criteria and tick off the checklist yourself.</p>
+
+    <div id="phrase-results"></div>
+
+    <div id="criteria-review" style="margin-top:14px;"></div>
+
+    <div id="checklist-review" style="margin-top:14px;"></div>
+
+    <button class="primary" style="margin-top:16px;" onclick="runAnalysis()">Analyze call</button>
+  </section>
+
+  <section>
+    <h2>4 · Report</h2>
+    <p class="hint">A plain-text summary you can copy, save, or paste into your QA log.</p>
+    <div id="report">Run the analysis above to generate a report.</div>
+    <div class="btn-row">
+      <button class="ghost" onclick="copyReport()">Copy report</button>
+      <button class="ghost" onclick="downloadReport()">Download .txt</button>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const STORAGE_KEY = 'cqc_config_v1';
+
+const defaultConfig = {
+  required: ["thank you for calling", "is there anything else"],
+  forbidden: ["i don't know", "not my problem"],
+  criteria: [
+    { name: "Tone & empathy", weight: 3 },
+    { name: "Clarity of explanation", weight: 2 },
+    { name: "Issue resolution", weight: 3 }
+  ],
+  checklist: [
+    "Verified caller identity",
+    "Followed the required script/greeting",
+    "Offered a next step or follow-up"
+  ]
+};
+
+let config = loadConfig();
+let audioObjectUrl = null;
+
+function loadConfig(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return JSON.parse(JSON.stringify(defaultConfig));
+}
+function saveConfig(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
+
+function renderConfig(){
+  // required
+  const reqEl = document.getElementById('required-list');
+  reqEl.innerHTML = '';
+  config.required.forEach((val, i) => {
+    reqEl.appendChild(makeConditionRow(val, i, 'required'));
+  });
+
+  // forbidden
+  const forbEl = document.getElementById('forbidden-list');
+  forbEl.innerHTML = '';
+  config.forbidden.forEach((val, i) => {
+    forbEl.appendChild(makeConditionRow(val, i, 'forbidden'));
+  });
+
+  // criteria
+  const critEl = document.getElementById('criteria-config-list');
+  critEl.innerHTML = '';
+  config.criteria.forEach((c, i) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `
+      <input type="text" value="${escapeAttr(c.name)}" onchange="updateCriteriaName(${i}, this.value)" placeholder="Criterion name">
+      <input type="number" min="1" max="10" value="${c.weight}" onchange="updateCriteriaWeight(${i}, this.value)" title="weight">
+      <button class="icon-btn" onclick="removeCriteria(${i})">✕</button>
+    `;
+    critEl.appendChild(row);
+  });
+
+  // checklist
+  const chkEl = document.getElementById('checklist-config-list');
+  chkEl.innerHTML = '';
+  config.checklist.forEach((val, i) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `
+      <input type="text" value="${escapeAttr(val)}" onchange="updateChecklistText(${i}, this.value)">
+      <button class="icon-btn" onclick="removeChecklist(${i})">✕</button>
+    `;
+    chkEl.appendChild(row);
+  });
+
+  renderReviewSkeleton();
+}
+
+function makeConditionRow(val, i, type){
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `
+    <input type="text" value="${escapeAttr(val)}" onchange="updateCondition('${type}', ${i}, this.value)">
+    <button class="icon-btn" onclick="removeCondition('${type}', ${i})">✕</button>
+  `;
+  return row;
+}
+
+function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+
+function addCondition(type){
+  config[type].push('');
+  saveConfig();
+  renderConfig();
+}
+function updateCondition(type, i, val){ config[type][i] = val; saveConfig(); }
+function removeCondition(type, i){ config[type].splice(i,1); saveConfig(); renderConfig(); }
+
+function addCriteria(){
+  config.criteria.push({name:'', weight:1});
+  saveConfig();
+  renderConfig();
+}
+function updateCriteriaName(i, val){ config.criteria[i].name = val; saveConfig(); }
+function updateCriteriaWeight(i, val){ config.criteria[i].weight = parseInt(val)||1; saveConfig(); }
+function removeCriteria(i){ config.criteria.splice(i,1); saveConfig(); renderConfig(); }
+
+function addChecklist(){
+  config.checklist.push('');
+  saveConfig();
+  renderConfig();
+}
+function updateChecklistText(i, val){ config.checklist[i] = val; saveConfig(); }
+function removeChecklist(i){ config.checklist.splice(i,1); saveConfig(); renderConfig(); }
+
+function exportConfig(){
+  const blob = new Blob([JSON.stringify(config, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'call-quality-conditions.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function importConfig(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      config = Object.assign(JSON.parse(JSON.stringify(defaultConfig)), parsed);
+      saveConfig();
+      renderConfig();
+    }catch(err){
+      alert('That file could not be read as a valid conditions file.');
+    }
+  };
+  reader.readAsText(file);
+}
+function resetConfig(){
+  if(!confirm('Reset all conditions to the default example set?')) return;
+  config = JSON.parse(JSON.stringify(defaultConfig));
+  saveConfig();
+  renderConfig();
+}
+
+// ---- Review state ----
+let criteriaScores = {};
+let checklistState = {};
+
+function renderReviewSkeleton(){
+  const critRev = document.getElementById('criteria-review');
+  critRev.innerHTML = '<label>Rate each criterion</label>';
+  config.criteria.forEach((c, i) => {
+    if(!(i in criteriaScores)) criteriaScores[i] = 0;
+    const wrap = document.createElement('div');
+    wrap.className = 'criteria-item';
+    let buttons = '';
+    for(let s=1; s<=5; s++){
+      buttons += `<button class="${criteriaScores[i]===s?'active':''}" onclick="setCriteriaScore(${i},${s})">${s}</button>`;
+    }
+    wrap.innerHTML = `
+      <div>
+        <div class="criteria-name">${c.name || '(unnamed criterion)'}</div>
+        <div class="criteria-weight">weight ×${c.weight}</div>
+      </div>
+      <div class="score-select">${buttons}</div>
+    `;
+    critRev.appendChild(wrap);
+  });
+
+  const chkRev = document.getElementById('checklist-review');
+  chkRev.innerHTML = '<label>Checklist</label>';
+  config.checklist.forEach((item, i) => {
+    if(!(i in checklistState)) checklistState[i] = false;
+    const wrap = document.createElement('div');
+    wrap.className = 'checklist-item';
+    wrap.innerHTML = `
+      <label class="chk">
+        <input type="checkbox" ${checklistState[i]?'checked':''} onchange="toggleChecklist(${i}, this.checked)">
+        ${item || '(unnamed item)'}
+      </label>
+    `;
+    chkRev.appendChild(wrap);
+  });
+}
+
+function setCriteriaScore(i, s){
+  criteriaScores[i] = s;
+  renderReviewSkeleton();
+}
+function toggleChecklist(i, checked){
+  checklistState[i] = checked;
+}
+
+function loadAudio(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
+  audioObjectUrl = URL.createObjectURL(file);
+  const player = document.getElementById('audio-player');
+  player.src = audioObjectUrl;
+  player.style.display = 'block';
+}
+
+function runAnalysis(){
+  const transcript = (document.getElementById('transcript').value || '').toLowerCase();
+
+  // Phrase checks
+  const phraseWrap = document.getElementById('phrase-results');
+  phraseWrap.innerHTML = '<label>Phrase check results</label><div class="chip-list" id="req-chips"></div><div class="chip-list" id="forb-chips" style="margin-top:8px;"></div>';
+  const reqChips = document.getElementById('req-chips');
+  const forbChips = document.getElementById('forb-chips');
+
+  let reqHits = 0, reqTotal = 0;
+  config.required.forEach(phrase => {
+    if(!phrase.trim()) return;
+    reqTotal++;
+    const found = transcript.includes(phrase.toLowerCase());
+    if(found) reqHits++;
+    const chip = document.createElement('span');
+    chip.className = 'chip ' + (found ? 'hit' : 'miss');
+    chip.textContent = (found ? '✓ ' : '✕ ') + phrase;
+    reqChips.appendChild(chip);
+  });
+
+  let forbHits = 0, forbTotal = 0;
+  config.forbidden.forEach(phrase => {
+    if(!phrase.trim()) return;
+    forbTotal++;
+    const found = transcript.includes(phrase.toLowerCase());
+    if(found) forbHits++;
+    const chip = document.createElement('span');
+    chip.className = 'chip ' + (found ? 'forbidden-hit' : 'hit');
+    chip.textContent = (found ? '⚠ found: ' : '✓ absent: ') + phrase;
+    forbChips.appendChild(chip);
+  });
+
+  // Score calc
+  // Phrase score: 40% of total. Required phrase hit rate, minus penalty per forbidden hit.
+  const reqRate = reqTotal ? (reqHits / reqTotal) : 1;
+  const forbPenalty = forbHits * 0.25; // each forbidden phrase found cuts 25% off phrase score
+  const phraseScore = Math.max(0, Math.min(1, reqRate - forbPenalty));
+
+  // Criteria score: 40% of total. Weighted average of 1-5 ratings, normalized to 0-1.
+  let critWeightSum = 0, critScoreSum = 0;
+  config.criteria.forEach((c, i) => {
+    const rating = criteriaScores[i] || 0;
+    critWeightSum += c.weight;
+    critScoreSum += (rating/5) * c.weight;
+  });
+  const criteriaScore = critWeightSum ? (critScoreSum / critWeightSum) : 0;
+
+  // Checklist score: 20% of total.
+  const chkTotal = config.checklist.length;
+  const chkChecked = Object.values(checklistState).filter(Boolean).length;
+  const checklistScore = chkTotal ? (chkChecked / chkTotal) : 1;
+
+  const overall = Math.round((phraseScore*0.4 + criteriaScore*0.4 + checklistScore*0.2) * 100);
+
+  updateMeter(overall);
+  buildReport({
+    transcript: document.getElementById('transcript').value,
+    reqHits, reqTotal, forbHits, forbTotal,
+    criteriaScore, checklistScore, phraseScore,
+    overall
+  });
+}
+
+function updateMeter(score){
+  const meter = document.getElementById('meter');
+  meter.innerHTML = '';
+  const bars = 40;
+  let color = 'var(--err)';
+  let verdict = 'Needs coaching';
+  if(score >= 80){ color = 'var(--accent)'; verdict = 'Strong call'; }
+  else if(score >= 60){ color = 'var(--warn)'; verdict = 'Meets bar'; }
+
+  for(let i=0; i<bars; i++){
+    const bar = document.createElement('span');
+    const active = (i / bars * 100) < score;
+    const h = 6 + Math.abs(Math.sin(i*0.7)) * 32; // waveform-like variance
+    bar.style.height = active ? h + 'px' : '3px';
+    bar.style.background = active ? color : 'var(--panel-2)';
+    meter.appendChild(bar);
+  }
+  document.getElementById('meter-score').textContent = `Score: ${score} / 100`;
+  document.getElementById('meter-verdict').textContent = verdict;
+}
+
+let lastReportText = '';
+
+function buildReport(d){
+  const lines = [];
+  lines.push('CALL QUALITY REPORT');
+  lines.push('Generated: ' + new Date().toLocaleString());
+  lines.push('='.repeat(40));
+  lines.push(`Overall score: ${d.overall} / 100`);
+  lines.push('');
+  lines.push(`Required phrases: ${d.reqHits}/${d.reqTotal} found`);
+  lines.push(`Forbidden phrases found: ${d.forbHits}/${d.forbTotal}`);
+  lines.push('');
+  lines.push('Scoring criteria:');
+  config.criteria.forEach((c,i) => {
+    lines.push(`  - ${c.name || '(unnamed)'}: ${criteriaScores[i]||0}/5 (weight ${c.weight})`);
+  });
+  lines.push('');
+  lines.push('Checklist:');
+  config.checklist.forEach((item,i) => {
+    lines.push(`  [${checklistState[i] ? 'x' : ' '}] ${item || '(unnamed)'}`);
+  });
+  lines.push('');
+  lines.push('-'.repeat(40));
+  lines.push('Transcript reviewed:');
+  lines.push(d.transcript || '(none provided)');
+
+  lastReportText = lines.join('\n');
+  document.getElementById('report').textContent = lastReportText;
+}
+
+function copyReport(){
+  if(!lastReportText){ alert('Run the analysis first.'); return; }
+  navigator.clipboard.writeText(lastReportText).then(()=> {
+    alert('Report copied to clipboard.');
+  });
+}
+function downloadReport(){
+  if(!lastReportText){ alert('Run the analysis first.'); return; }
+  const blob = new Blob([lastReportText], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'call-quality-report.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// init
+renderConfig();
+updateMeter(0);
+</script>
+
+</body>
+</html>
