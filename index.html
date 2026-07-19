@@ -6,6 +6,8 @@
 <title>Call Quality Checker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg:#0B0F0E;
@@ -131,9 +133,67 @@
     header h1{font-size:19px;}
     section{padding:16px;}
   }
+
+  /* Auth gate */
+  #auth-gate{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  #auth-box{
+    width:100%; max-width:360px; background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; padding:28px 24px;
+  }
+  #auth-box h1{font-size:20px; margin-bottom:4px;}
+  #auth-box p.hint{color:var(--muted); font-size:13px; margin:0 0 20px;}
+  #auth-box label{margin-top:12px;}
+  #auth-error{color:var(--err); font-size:13px; margin-top:10px; display:none;}
+  #auth-tabs{display:flex; gap:8px; margin-bottom:18px;}
+  #auth-tabs button{
+    flex:1; background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
+    padding:8px; border-radius:6px; font-size:13px; cursor:pointer;
+  }
+  #auth-tabs button.active{border-color:var(--accent); color:var(--accent);}
+  #user-bar{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:12px; color:var(--muted); padding:6px 20px 0;
+  }
+  #user-bar button{
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;
+  }
+  #user-bar button:hover{border-color:var(--err); color:var(--err);}
+  #app-shell{display:none;}
 </style>
 </head>
 <body>
+
+<div id="auth-gate">
+  <div id="auth-box">
+    <h1>Call Quality Checker</h1>
+    <p class="hint">Sign in or create an account to continue.</p>
+
+    <div id="auth-tabs">
+      <button id="tab-login" class="active" onclick="switchAuthTab('login')">Log In</button>
+      <button id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
+    </div>
+
+    <label>Email</label>
+    <input type="text" id="auth-email" placeholder="you@example.com">
+    <label style="margin-top:12px;">Password</label>
+    <input type="text" id="auth-password" placeholder="••••••••" style="-webkit-text-security:disc; text-security:disc;">
+
+    <div id="auth-error"></div>
+
+    <button class="primary" style="margin-top:18px;" onclick="submitAuth()" id="auth-submit-btn">Log In</button>
+  </div>
+</div>
+
+<div id="app-shell">
+
+<div id="user-bar">
+  <span id="user-email"></span>
+  <button onclick="logout()">Log out</button>
+</div>
 
 <header>
   <div class="eyebrow">QA / call review</div>
@@ -213,7 +273,70 @@
 
 </main>
 
+</div>
+
 <script>
+// ---- Firebase Auth setup ----
+const firebaseConfig = {
+  apiKey: "AIzaSyC_M86vBlsj0egHiZy3h08SrDQqItRL4Yk",
+  authDomain: "call-quality-checker.firebaseapp.com",
+  projectId: "call-quality-checker",
+  storageBucket: "call-quality-checker.firebasestorage.app",
+  messagingSenderId: "962726512866",
+  appId: "1:962726512866:web:109a533d966fcb38a3f6bb"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+let authMode = 'login';
+function switchAuthTab(mode){
+  authMode = mode;
+  document.getElementById('tab-login').classList.toggle('active', mode==='login');
+  document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
+  document.getElementById('auth-submit-btn').textContent = mode==='login' ? 'Log In' : 'Sign Up';
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+function showAuthError(msg){
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function submitAuth(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if(!email || !password){
+    showAuthError('Please enter both email and password.');
+    return;
+  }
+  const action = authMode === 'login'
+    ? auth.signInWithEmailAndPassword(email, password)
+    : auth.createUserWithEmailAndPassword(email, password);
+
+  action.catch(err => {
+    showAuthError(err.message.replace('Firebase: ', ''));
+  });
+}
+
+function logout(){
+  auth.signOut();
+}
+
+auth.onAuthStateChanged(user => {
+  const gate = document.getElementById('auth-gate');
+  const shell = document.getElementById('app-shell');
+  if(user){
+    gate.style.display = 'none';
+    shell.style.display = 'block';
+    document.getElementById('user-email').textContent = user.email;
+  } else {
+    gate.style.display = 'flex';
+    shell.style.display = 'none';
+  }
+});
+
+// ---- Existing app logic ----
 const STORAGE_KEY = 'cqc_config_v1';
 
 const defaultConfig = {
